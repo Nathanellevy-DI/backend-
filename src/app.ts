@@ -23,6 +23,21 @@ if (env.NODE_ENV === 'development') {
     });
 }
 
+// Lazy database connection for serverless
+let dbConnected = false;
+app.use(async (req, res, next) => {
+    if (!dbConnected) {
+        try {
+            await connectDatabase();
+            dbConnected = true;
+        } catch (error) {
+            console.error('Database connection failed:', error);
+            return res.status(500).json({ error: 'Database connection failed' });
+        }
+    }
+    next();
+});
+
 // API Routes
 app.use('/api', routes);
 
@@ -53,15 +68,13 @@ app.use((err: Error, req: express.Request, res: express.Response, next: express.
     res.status(500).json({ error: 'Internal server error' });
 });
 
-// Start server
-async function startServer() {
-    try {
-        // Connect to database
-        await connectDatabase();
-
-        // Start listening
-        app.listen(env.PORT, () => {
-            console.log(`
+// Start server only in non-serverless environment
+if (process.env.VERCEL !== '1') {
+    async function startServer() {
+        try {
+            await connectDatabase();
+            app.listen(env.PORT, () => {
+                console.log(`
 🚀 Travel Maps Backend is running!
    
    Local:    http://localhost:${env.PORT}
@@ -69,13 +82,15 @@ async function startServer() {
    
    Environment: ${env.NODE_ENV}
       `);
-        });
-    } catch (error) {
-        console.error('Failed to start server:', error);
-        process.exit(1);
+            });
+        } catch (error) {
+            console.error('Failed to start server:', error);
+            process.exit(1);
+        }
     }
+    startServer();
 }
 
-startServer();
-
+// Export for Vercel
 export default app;
+module.exports = app;

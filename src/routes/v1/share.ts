@@ -1,5 +1,6 @@
 import { Router } from 'express';
-import { shareController } from '../../controllers/shareController';
+import { z } from 'zod';
+import * as shareService from '../../services/shareService';
 import { authMiddleware } from '../../middleware/authMiddleware';
 
 const router = Router();
@@ -7,25 +8,77 @@ const router = Router();
 // All routes require authentication
 router.use(authMiddleware);
 
-// GET /api/v1/share - Get items shared with me
-router.get('/', (req, res) => shareController.getSharedWithMe(req, res));
+/**
+ * Share a pin
+ * POST /api/v1/share/pin
+ */
+router.post('/pin', async (req, res, next) => {
+    try {
+        const schema = z.object({
+            pinId: z.string(),
+            toUserIds: z.array(z.string()).min(1),
+            pinData: z.record(z.any()).optional()
+        });
 
-// POST /api/v1/share/pin/:pinId - Share a pin
-router.post('/pin/:pinId', (req, res) => shareController.sharePin(req, res));
+        const { pinId, toUserIds, pinData } = schema.parse(req.body);
+        const userId = (req as any).userId;
 
-// DELETE /api/v1/share/pin/:pinId/:toUserId - Unshare a pin
-router.delete('/pin/:pinId/:toUserId', (req, res) => shareController.unsharePin(req, res));
+        const result = await shareService.sharePin({
+            pinId,
+            fromUserId: userId,
+            toUserIds,
+            pinData
+        });
 
-// GET /api/v1/share/pin/:pinId - Get who a pin is shared with
-router.get('/pin/:pinId', (req, res) => shareController.getPinShares(req, res));
+        res.json(result);
+    } catch (error) {
+        console.error('Share pin error:', error);
+        require('fs').appendFileSync('error.log', `[${new Date().toISOString()}] Share Pin Error: ${JSON.stringify(error, Object.getOwnPropertyNames(error))}\n`);
+        next(error);
+    }
+});
 
-// POST /api/v1/share/category/:categoryId - Share a category
-router.post('/category/:categoryId', (req, res) => shareController.shareCategory(req, res));
+/**
+ * Share a category
+ * POST /api/v1/share/category
+ */
+router.post('/category', async (req, res, next) => {
+    try {
+        const schema = z.object({
+            categoryId: z.string(),
+            toUserIds: z.array(z.string()).min(1)
+        });
 
-// DELETE /api/v1/share/category/:categoryId/:toUserId - Unshare a category
-router.delete('/category/:categoryId/:toUserId', (req, res) => shareController.unshareCategory(req, res));
+        const { categoryId, toUserIds } = schema.parse(req.body);
+        const userId = (req as any).userId;
 
-// GET /api/v1/share/category/:categoryId - Get who a category is shared with
-router.get('/category/:categoryId', (req, res) => shareController.getCategoryShares(req, res));
+        const result = await shareService.shareCategory({
+            categoryId,
+            fromUserId: userId,
+            toUserIds
+        });
+
+        res.json(result);
+    } catch (error) {
+        console.error('Share category error:', error);
+        require('fs').appendFileSync('error.log', `[${new Date().toISOString()}] Share Category Error: ${JSON.stringify(error, Object.getOwnPropertyNames(error))}\n`);
+        next(error);
+    }
+});
+
+/**
+ * Get shared items
+ * GET /api/v1/share/items
+ */
+router.get('/items', async (req, res, next) => {
+    try {
+        const userId = (req as any).userId;
+        const items = await shareService.getSharedItems(userId);
+        res.json(items);
+    } catch (error) {
+        console.error('Get shared items error:', error);
+        next(error);
+    }
+});
 
 export default router;

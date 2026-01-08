@@ -3,8 +3,8 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
 }
 
 model User {
@@ -21,6 +21,8 @@ model User {
   sharedCategoriesReceived SharedCategory[] @relation("ReceivedCategories")
   sharedPinsSent           SharedPin[]      @relation("SentPins")
   sharedPinsReceived       SharedPin[]      @relation("ReceivedPins")
+  friendships              Friendship[]     @relation("UserFriendships")
+  friendsOf                Friendship[]     @relation("FriendFriendships")
 
   @@map("users")
 }
@@ -88,4 +90,19 @@ model SharedCategory {
 
   @@unique([categoryId, toUserId])
   @@map("shared_categories")
+}
+
+model Friendship {
+  id        String   @id @default(uuid())
+  userId    String
+  friendId  String
+  status    String   // 'pending', 'accepted', 'rejected'
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user   User @relation("UserFriendships", fields: [userId], references: [id], onDelete: Cascade)
+  friend User @relation("FriendFriendships", fields: [friendId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, friendId])
+  @@map("friendships")
 }

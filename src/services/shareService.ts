@@ -48,23 +48,35 @@ export async function sharePin(input: SharePinInput & { pinData?: any }) {
         const categoryName = pinData.category || 'Default';
         const category = await getOrCreateCategory(fromUserId, categoryName);
 
+        // Handle memories - serialize to notes field as JSON
+        let notesValue = pinData.notes || '';
+        let imageUrlValue = pinData.imageBase64 || pinData.imageUrl || null;
+
+        // If memories array exists, serialize it to notes field
+        if (pinData.memories && Array.isArray(pinData.memories) && pinData.memories.length > 0) {
+            // Store memories as JSON with a special prefix so we can parse it later
+            notesValue = `__MEMORIES_JSON__${JSON.stringify(pinData.memories)}`;
+
+            // Use first image from memories as imageUrl if not already set
+            if (!imageUrlValue) {
+                const firstImage = pinData.memories.find((m: any) => m.type === 'image');
+                if (firstImage) {
+                    imageUrlValue = firstImage.content;
+                }
+            }
+        }
+
         // Create pin
         try {
             pin = await prisma.pin.create({
                 data: {
-                    // If pinId is a valid UUID, try to use it. If not, let Prisma generate one?
-                    // For safety, let's use the provided ID if it looks like a UUID, otherwise generate new.
-                    // Actually, to keep simple, let's try to use the passed ID. If it fails (e.g. format), we might need fallback.
-                    // But Prisma create with specific ID requires it to match the type.
-                    // We'll rely on the frontend sending a UUID or we generate one.
-                    // For now, let's try to map the fields.
                     title: pinData.title || pinData.name || 'Untitled Pin',
                     description: pinData.description || '',
                     latitude: parseFloat(pinData.lat),
                     longitude: parseFloat(pinData.lon),
                     address: pinData.formatted || '',
-                    notes: pinData.notes || '',
-                    imageUrl: pinData.imageBase64 || null, // Assuming base64 or url
+                    notes: notesValue,
+                    imageUrl: imageUrlValue,
                     userId: fromUserId,
                     categoryId: category.id,
                     isPublic: false
@@ -83,6 +95,28 @@ export async function sharePin(input: SharePinInput & { pinData?: any }) {
 
     if (pin.userId !== fromUserId) {
         throw new Error('Unauthorized');
+    }
+
+    // 3. If pin exists and we have pinData with memories, UPDATE the pin's notes
+    if (pinData && pinData.memories && Array.isArray(pinData.memories) && pinData.memories.length > 0) {
+        // Serialize memories to notes field
+        const notesValue = `__MEMORIES_JSON__${JSON.stringify(pinData.memories)}`;
+
+        // Find first image for imageUrl
+        let imageUrlValue = pin.imageUrl;
+        const firstImage = pinData.memories.find((m: any) => m.type === 'image');
+        if (firstImage && firstImage.content) {
+            imageUrlValue = firstImage.content;
+        }
+
+        // Update the pin with memories
+        pin = await prisma.pin.update({
+            where: { id: pin.id },
+            data: {
+                notes: notesValue,
+                imageUrl: imageUrlValue
+            }
+        });
     }
 
     // Filter valid friends
@@ -222,4 +256,52 @@ export async function getSharedItems(userId: string) {
             type: 'category'
         }))
     };
+}
+
+/**
+ * Share a pin with ALL accepted friends
+ */
+export async function shareWithAllFriends(pinId: string, fromUserId: string, pinData?: any) {
+    // Get all friends
+    const friends = await friendService.getFriends(fromUserId);
+    const allFriendIds = friends.map(f => f.friend.id);
+
+    if (allFriendIds.length === 0) {
+        return { count: 0, message: 'No friends to share with' };
+    }
+
+    return sharePin({
+        pinId,
+        fromUserId,
+        toUserIds: allFriendIds,
+        pinData
+    });
+}
+
+/**
+ * Get public pins (excluding own pins)
+ */
+export async function getPublicPins(userId: string, limit = 50) {
+    const pins = await prisma.pin.findMany({
+        where: {
+            isPublic: true,
+            userId: { not: userId } // Exclude own pins
+        },
+        include: {
+            category: {
+                select: { id: true, name: true, color: true }
+            },
+            user: {
+                select: { id: true, username: true, displayName: true }
+            }
+        },
+        take: limit,
+        orderBy: { createdAt: 'desc' }
+    });
+
+    return pins.map(pin => ({
+        ...pin,
+        sharedBy: pin.user,
+        type: 'public'
+    }));
 }

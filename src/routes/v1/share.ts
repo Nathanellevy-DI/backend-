@@ -33,7 +33,6 @@ router.post('/pin', async (req, res, next) => {
         res.json(result);
     } catch (error) {
         console.error('Share pin error:', error);
-        require('fs').appendFileSync('error.log', `[${new Date().toISOString()}] Share Pin Error: ${JSON.stringify(error, Object.getOwnPropertyNames(error))}\n`);
         next(error);
     }
 });
@@ -61,7 +60,6 @@ router.post('/category', async (req, res, next) => {
         res.json(result);
     } catch (error) {
         console.error('Share category error:', error);
-        require('fs').appendFileSync('error.log', `[${new Date().toISOString()}] Share Category Error: ${JSON.stringify(error, Object.getOwnPropertyNames(error))}\n`);
         next(error);
     }
 });
@@ -81,4 +79,42 @@ router.get('/items', async (req, res, next) => {
     }
 });
 
+/**
+ * Share a pin with ALL friends
+ * POST /api/v1/share/pin/all-friends
+ */
+router.post('/pin/all-friends', async (req, res, next) => {
+    try {
+        const schema = z.object({
+            pinId: z.string(),
+            pinData: z.record(z.any()).optional()
+        });
+
+        const { pinId, pinData } = schema.parse(req.body);
+        const userId = (req as any).userId;
+
+        const result = await shareService.shareWithAllFriends(pinId, userId, pinData);
+        res.json(result);
+    } catch (error) {
+        console.error('Share with all friends error:', error);
+        next(error);
+    }
+});
+
+/**
+ * Get public pins (from other users)
+ * GET /api/v1/share/public
+ */
+router.get('/public', async (req, res, next) => {
+    try {
+        const userId = (req as any).userId;
+        const pins = await shareService.getPublicPins(userId);
+        res.json({ pins });
+    } catch (error) {
+        console.error('Get public pins error:', error);
+        next(error);
+    }
+});
+
 export default router;
+

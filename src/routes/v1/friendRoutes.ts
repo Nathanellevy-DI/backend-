@@ -53,8 +53,6 @@ router.post('/request', async (req, res, next) => {
         res.status(201).json(friendship);
     } catch (error) {
         console.error('Friend request error:', error);
-        // Write error to file since console is swallowed
-        require('fs').appendFileSync('error.log', `[${new Date().toISOString()}] Friend Request Error: ${JSON.stringify(error, Object.getOwnPropertyNames(error))}\n`);
         next(error);
     }
 });

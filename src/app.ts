@@ -9,7 +9,7 @@ const app = express();
 
 // Middleware
 app.use(cors({
-    origin: env.CORS_ORIGIN === '*' ? '*' : env.CORS_ORIGIN.split(','),
+    origin: env.CORS_ORIGIN === '*' ? '*' : env.CORS_ORIGIN.split(',').map(o => o.trim()),
     credentials: true,
 }));
 app.use(express.json());
@@ -63,8 +63,21 @@ app.use((req, res) => {
 });
 
 // Global error handler
-app.use((err: Error, req: express.Request, res: express.Response, next: express.NextFunction) => {
-    console.error('Error:', err);
+app.use((err: Error & { name?: string; issues?: any }, req: express.Request, res: express.Response, next: express.NextFunction) => {
+    console.error('Error:', err.message || err);
+
+    // Zod validation errors
+    if (err.name === 'ZodError') {
+        res.status(400).json({ error: 'Validation failed', details: err.issues });
+        return;
+    }
+
+    // Known errors with messages
+    if (err.message && !err.message.includes('prisma')) {
+        res.status(400).json({ error: err.message });
+        return;
+    }
+
     res.status(500).json({ error: 'Internal server error' });
 });
 
@@ -73,12 +86,15 @@ if (process.env.VERCEL !== '1') {
     async function startServer() {
         try {
             await connectDatabase();
-            app.listen(env.PORT, () => {
+            // Use process.env.PORT directly for Railway, fall back to env.PORT
+            const port = process.env.PORT || env.PORT;
+            // Bind to 0.0.0.0 to accept connections from Railway's proxy
+            app.listen(Number(port), '0.0.0.0', () => {
                 console.log(`
 🚀 Travel Maps Backend is running!
    
-   Local:    http://localhost:${env.PORT}
-   Health:   http://localhost:${env.PORT}/api/health
+   Local:    http://localhost:${port}
+   Health:   http://localhost:${port}/api/health
    
    Environment: ${env.NODE_ENV}
       `);

@@ -8,7 +8,7 @@ export const CreatePinSchema = z.object({
     longitude: z.number().min(-180).max(180),
     address: z.string().max(500).optional(),
     notes: z.string().max(5000).optional(),
-    imageUrl: z.string().url().optional(),
+    imageUrl: z.string().optional(), // Allows URLs and base64 data URIs
     isPublic: z.boolean().default(false),
     categoryId: z.string().uuid().optional(),
 });
@@ -20,7 +20,7 @@ export const UpdatePinSchema = z.object({
     longitude: z.number().min(-180).max(180).optional(),
     address: z.string().max(500).optional(),
     notes: z.string().max(5000).optional(),
-    imageUrl: z.string().url().optional(),
+    imageUrl: z.string().optional(), // Allows URLs and base64 data URIs
     isPublic: z.boolean().optional(),
     categoryId: z.string().uuid().nullable().optional(),
 });

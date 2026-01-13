@@ -88,10 +88,10 @@ if (process.env.VERCEL !== '1') {
             await connectDatabase();
             // Use process.env.PORT directly for Railway, fall back to env.PORT
             const port = process.env.PORT || env.PORT;
-            // Bind to 0.0.0.0 to accept connections from Railway's proxy
-            app.listen(Number(port), '0.0.0.0', () => {
+            // Listen on default host (0.0.0.0 or ::) to ensure compatibility
+            app.listen(Number(port), () => {
                 console.log(`
-🚀 Travel Maps Backend is running!
+🚀 Travel Maps Backend (v2) is running!
    
    Local:    http://localhost:${port}
    Health:   http://localhost:${port}/api/health
